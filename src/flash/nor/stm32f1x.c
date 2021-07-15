@@ -644,6 +644,9 @@ static int stm32x_get_device_id(struct flash_bank *bank, uint32_t *device_id)
 	} else if (((cpuid >> 4) & 0xFFF) == 0xC24) {
 		/* 0xC24 is M4 devices */
 		device_id_register = 0xE0042000;
+	} else if (((cpuid >> 4) & 0xFFF) == 0xD20) {
+		/* 0xD20 is M23 devices */
+		device_id_register = 0x40015800; // DBG_ID
 	} else {
 		LOG_ERROR("Cannot identify target as a stm32x");
 		return ERROR_FAIL;
@@ -666,6 +669,8 @@ static int stm32x_get_flash_size(struct flash_bank *bank, uint16_t *flash_size_i
 	if (retval != ERROR_OK)
 		return retval;
 
+	LOG_INFO("cpu id = 0x%08" PRIx32 "", cpuid);
+
 	if (((cpuid >> 4) & 0xFFF) == 0xC20) {
 		/* 0xC20 is M0 devices */
 		flash_size_reg = 0x1FFFF7CC;
@@ -675,6 +680,9 @@ static int stm32x_get_flash_size(struct flash_bank *bank, uint16_t *flash_size_i
 	} else if (((cpuid >> 4) & 0xFFF) == 0xC24) {
 		/* 0xC24 is M4 devices */
 		flash_size_reg = 0x1FFFF7CC;
+	} else if (((cpuid >> 4) & 0xFFF) == 0xD20) {
+		/* 0xD20 is M23 devices */
+		flash_size_reg = 0x1FFFF7E0;
 	} else {
 		LOG_ERROR("Cannot identify target as a stm32x");
 		return ERROR_FAIL;
@@ -682,7 +690,14 @@ static int stm32x_get_flash_size(struct flash_bank *bank, uint16_t *flash_size_i
 
 	retval = target_read_u16(target, flash_size_reg, flash_size_in_kb);
 	if (retval != ERROR_OK)
-		return retval;
+	{
+		if(flash_size_reg == 0x1FFFF7CC)
+		{
+			flash_size_reg = 0x1FFFF7E0;
+			LOG_INFO("Trying flash size reg 0x%08" PRIx32 "", flash_size_reg);
+			retval = target_read_u16(target, flash_size_reg, flash_size_in_kb);
+		}		
+	}
 
 	return retval;
 }
@@ -775,6 +790,11 @@ static int stm32x_probe(struct flash_bank *bank)
 			stm32x_info->user_data_offset = 16;
 			stm32x_info->option_offset = 6;
 			break;
+		case 0x1909: /* gd32e2x0 */
+			stm32x_info->user_data_offset = 16;
+			stm32x_info->option_offset = 6;
+			max_flash_size_in_kb = 64;			
+			break;
 		}
 		break;
 	case 0x412: /* stm32f1x low-density */
@@ -845,6 +865,13 @@ static int stm32x_probe(struct flash_bank *bank)
 		stm32x_info->default_rdp = 0xAA;
 		stm32x_info->can_load_options = true;
 		break;
+	
+	case 0x1C5: /* AT32F415 */
+		page_size = 1024;
+		stm32x_info->ppage_size = 4;
+		max_flash_size_in_kb = 128;
+		break;
+
 	default:
 		LOG_WARNING("Cannot identify target as a STM32 family.");
 		return ERROR_FAIL;
