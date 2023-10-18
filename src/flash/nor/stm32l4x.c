@@ -1359,11 +1359,14 @@ static const char *get_stm32l4_bank_type_str(struct flash_bank *bank)
 static int stm32l4_probe(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
-	struct stm32l4_flash_bank *stm32l4_info = bank->driver_priv;
+	struct stm32l4_flash_bank *stm32l4_info;
 	const struct stm32l4_part_info *part_info;
 	uint16_t flash_size_kb = 0xffff;
 	uint32_t options;
+    uint32_t device_id;
+    uint16_t rev_id;
 
+    stm32l4_info = bank->driver_priv;
 	stm32l4_info->probed = false;
 
 	/* read stm32 device id registers */
@@ -1371,9 +1374,8 @@ static int stm32l4_probe(struct flash_bank *bank)
 	if (retval != ERROR_OK)
 		return retval;
 
-	const uint32_t device_id = stm32l4_info->idcode & 0xFFF;
-	const uint16_t rev_id = stm32l4_info->idcode >> 16;
-	const char *rev_str = get_stm32l4_rev_str(bank);
+	device_id = stm32l4_info->idcode & 0xFFF;
+	rev_id = stm32l4_info->idcode >> 16;
 
 	for (unsigned int n = 0; n < ARRAY_SIZE(stm32l4_parts); n++) {
 		if (device_id == stm32l4_parts[n].id) {
@@ -1381,6 +1383,8 @@ static int stm32l4_probe(struct flash_bank *bank)
 			break;
 		}
 	}
+    
+	const char *rev_str = get_stm32l4_rev_str(bank);
 
 	if (!stm32l4_info->part_info) {
 		LOG_WARNING("Cannot identify target as an %s family device.", device_families);
